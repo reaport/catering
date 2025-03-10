@@ -26,7 +26,7 @@ Catering Service — микросервис для управления проц
 
 ```bash
 # Клонирование репозитория
-git clone https: https://github.com/reaport/catering.git
+git clone https://github.com/reaport/catering.git
 cd CateringService
 
 # Сборка проекта
@@ -59,9 +59,20 @@ https://localhost:5001/Admin/Index
 }
 ```
 
+### Получение доступных типов питания
+
+- **URL:** `GET /mealtypes`
+- **Успешный ответ (200):**
+
+```json
+{
+  "mealTypes": ["Standard", "Vegetarian", "Vegan", "Gluten-Free"]
+}
+```
+
 ### Ответы API
 
-- **Успешный ответ (200):**
+- **Успешный ответ на запрос доставки (200):**
 
 ```json
 {
@@ -106,3 +117,4 @@ https://localhost:5001/Admin/Index
 ## Логирование
 
 Все операции сервиса логируются с использованием встроенных механизмов .NET для удобства мониторинга и отладки.
+
