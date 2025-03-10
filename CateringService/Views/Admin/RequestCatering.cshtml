@@ -1,0 +1,29 @@
+﻿@{
+    ViewData["Title"] = "Request Catering";
+}
+<h2>Request Catering</h2>
+
+@if (ViewBag.Message != null)
+{
+    <div class="alert alert-success">@ViewBag.Message</div>
+}
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-danger">@ViewBag.Error</div>
+}
+
+<form method="post">
+    <div class="form-group">
+        <label for="AircraftId">Aircraft ID</label>
+        <input type="text" class="form-control" id="AircraftId" name="AircraftId" required />
+    </div>
+    <div class="form-group">
+        <label for="NodeId">Node ID (Optional)</label>
+        <input type="text" class="form-control" id="NodeId" name="NodeId" />
+    </div>
+    <div class="form-group">
+        <label for="Meals">Meal Orders (JSON format)</label>
+        <textarea class="form-control" id="Meals" name="Meals" rows="5" placeholder='[{"MealType": "Standard", "Count": 10}, {"MealType": "Vegetarian", "Count": 5}]' required></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Submit Request</button>
+</form>

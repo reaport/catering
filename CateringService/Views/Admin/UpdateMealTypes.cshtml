@@ -1,0 +1,21 @@
+﻿@{
+    ViewData["Title"] = "Update Meal Types";
+}
+<h2>Update Meal Types</h2>
+
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-danger">@ViewBag.Error</div>
+}
+@if (ViewBag.Message != null)
+{
+    <div class="alert alert-success">@ViewBag.Message</div>
+}
+
+<form method="post">
+    <div class="form-group">
+        <label for="mealTypesJson">Meal Types (JSON format)</label>
+        <textarea class="form-control" id="mealTypesJson" name="mealTypesJson" rows="5" required>@ViewBag.MealTypesJson</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Update Meal Types</button>
+</form>
