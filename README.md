@@ -38,7 +38,8 @@ URL: POST /request
 
 AircraftId (string, обязательный): Идентификатор самолёта.
 
-Meals (array, обязательный): Массив заказов питания. Каждый заказ содержит:
+Meals (array, обязательный): Массив заказов питания. 
+Каждый заказ содержит:
 
 mealType (string): Тип питания (например, "Standard", "Vegetarian", "Vegan", "Gluten-Free").
 
