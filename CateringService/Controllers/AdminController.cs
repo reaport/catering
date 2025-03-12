@@ -66,13 +66,12 @@ namespace CateringService.Controllers
             var config = new AdminConfig
             {
                 ConflictRetryCount = updateRequest.ConflictRetryCount,
-                MovementSpeed = updateRequest.MovementSpeed,
                 NumberOfCateringVehicles = updateRequest.NumberOfCateringVehicles
             };
 
             _adminConfigService.UpdateConfig(config);
-            _logger.LogInformation("Configuration updated: RetryCount={RetryCount}, MovementSpeed={Speed}, Vehicles={Vehicles}",
-                config.ConflictRetryCount, config.MovementSpeed, config.NumberOfCateringVehicles);
+            _logger.LogInformation("Configuration updated: RetryCount={RetryCount},  Vehicles={Vehicles}",
+                config.ConflictRetryCount, config.NumberOfCateringVehicles);
 
             return Ok(new { message = "Configuration updated successfully." });
         }
