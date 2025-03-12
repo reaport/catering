@@ -29,6 +29,16 @@ builder.Services.AddHttpClient("Orchestrator", client =>
     client.BaseAddress = new Uri(baseUrl);
 });
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowLocalhost", policy =>
+    {
+        policy.WithOrigins("http://127.0.0.1:5500")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Сервисы приложения
 builder.Services.AddSingleton<IVehicleRegistry, VehicleRegistry>();
 builder.Services.AddSingleton<ICapacityService, CapacityService>();
