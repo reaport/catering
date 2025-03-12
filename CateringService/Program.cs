@@ -53,17 +53,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Регистрация политики CORS
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowLocalhost", policy =>
-    {
-        policy.WithOrigins("http://127.0.0.1:4400")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-});
-
 
 
 app.UseStaticFiles();
