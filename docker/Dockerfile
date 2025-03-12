@@ -7,10 +7,10 @@ RUN dotnet restore
 
 # Копируем все файлы и собираем приложение
 COPY ./CateringService/ ./
-RUN dotnet publish -c Release -o out ./catering.csproj
+RUN dotnet publish -c Release -o out ./CateringService.csproj
 
 # Собираем финальный образ
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app/out .
-ENTRYPOINT ["dotnet", "catering.dll"]
+ENTRYPOINT ["dotnet", "CateringService.dll"]
