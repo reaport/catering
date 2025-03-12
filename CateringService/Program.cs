@@ -53,16 +53,18 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.Use(async (context, next) =>
+// Регистрация политики CORS
+builder.Services.AddCors(options =>
 {
-    context.Response.Headers.Add("Content-Security-Policy",
-        "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdnjs.cloudflare.com;" +
-        "style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com;" +
-        "font-src 'self' data:;"
-    );
-    await next();
+    options.AddPolicy("AllowLocalhost", policy =>
+    {
+        policy.WithOrigins("http://127.0.0.1:4400")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
 });
+
+
 
 app.UseStaticFiles();
 app.UseRouting();
