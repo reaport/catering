@@ -29,15 +29,7 @@ builder.Services.AddHttpClient("Orchestrator", client =>
     client.BaseAddress = new Uri(baseUrl);
 });
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowLocalhost", policy =>
-    {
-        policy.WithOrigins("http://127.0.0.1:5500")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-});
+
 
 // Сервисы приложения
 builder.Services.AddSingleton<IVehicleRegistry, VehicleRegistry>();
@@ -63,7 +55,21 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-
+app.Use(async (context, next) =>
+{
+    // Вариант для быстрой настройки:
+    // Разрешаем (script-src) скрипты с self, code.jquery.com, cdnjs.cloudflare.com
+    // Разрешаем (style-src) стили с self, stackpath.bootstrapcdn.com
+    // Разрешаем (font-src) шрифты с self и data:
+    // Добавлен 'unsafe-inline' для простоты (иначе инлайновые стили/скрипты могут блокироваться)
+    context.Response.Headers.Add("Content-Security-Policy",
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdnjs.cloudflare.com; " +
+        "style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com; " +
+        "font-src 'self' data:;"
+    );
+    await next();
+});
 
 app.UseStaticFiles();
 app.UseRouting();
