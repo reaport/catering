@@ -1,11 +1,10 @@
-﻿using CateringService.Models;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 
 namespace CateringService.Services
 {
     public class CapacityService : ICapacityService
     {
-        private VehicleCapacity _currentCapacity = new VehicleCapacity { Capacity = 100 };
+        private int _capacity = 100;
         private readonly ILogger<CapacityService> _logger;
 
         public CapacityService(ILogger<CapacityService> logger)
@@ -13,15 +12,13 @@ namespace CateringService.Services
             _logger = logger;
         }
 
-        public VehicleCapacity GetCapacity() => _currentCapacity;
+        public int GetCapacity() => _capacity;
 
-        public void UpdateCapacity(VehicleCapacity capacity)
+        public void UpdateCapacity(int capacity)
         {
-            if (capacity != null && capacity.Capacity >= 0)
-            {
-                _currentCapacity = capacity;
-                _logger.LogInformation("CapacityService: Updated capacity to {Capacity}", capacity.Capacity);
-            }
+            if (capacity < 0) return;
+            _capacity = capacity;
+            _logger.LogInformation("CapacityService: Updated capacity to {Capacity}", capacity);
         }
     }
 }

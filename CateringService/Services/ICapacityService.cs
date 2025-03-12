@@ -1,10 +1,8 @@
-﻿using CateringService.Models;
-
-namespace CateringService.Services
+﻿namespace CateringService.Services
 {
     public interface ICapacityService
     {
-        VehicleCapacity GetCapacity();
-        void UpdateCapacity(VehicleCapacity capacity);
+        int GetCapacity();
+        void UpdateCapacity(int capacity);
     }
 }

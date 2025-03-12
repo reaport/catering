@@ -1,17 +1,14 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace CateringService.Models
 {
-    /// <summary>
-    /// Модель запроса доставки питания.
-    /// AircraftId – идентификатор самолёта, для которого осуществляется доставка.
-    /// NodeId – идентификатор точки доставки (опционально).
-    /// Meals – список заказов питания.
-    /// </summary>
     public class CateringRequest
     {
+        [Required]
         public string AircraftId { get; set; }
         public string NodeId { get; set; }
+        [Required]
         public List<MealOrder> Meals { get; set; }
     }
 }

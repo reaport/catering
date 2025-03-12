@@ -4,8 +4,8 @@ namespace CateringService.Services
 {
     public class CommModeService : ICommModeService
     {
+        private bool _useMock = false;
         private readonly ILogger<CommModeService> _logger;
-        private bool _useMock = true; // По умолчанию в режиме Mock
 
         public CommModeService(ILogger<CommModeService> logger)
         {

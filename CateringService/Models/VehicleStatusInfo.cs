@@ -6,7 +6,7 @@ namespace CateringService.Models
     {
         public string VehicleId { get; set; }
         public string BaseNode { get; set; }
-        public string Status { get; set; } // "Busy" или "Available"
-        public Dictionary<string, string> ServiceSpots { get; set; }
+        public string Status { get; set; }
+        public string CurrentNode { get; set; }
     }
 }
