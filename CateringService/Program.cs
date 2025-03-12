@@ -53,6 +53,17 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Add("Content-Security-Policy",
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdnjs.cloudflare.com;" +
+        "style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com;" +
+        "font-src 'self' data:;"
+    );
+    await next();
+});
+
 app.UseStaticFiles();
 app.UseRouting();
 app.UseCors("AllowLocalhost");
