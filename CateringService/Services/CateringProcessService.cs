@@ -63,55 +63,67 @@ namespace CateringService.Services
 
             if (!validMeals.Any())
             {
-                // Если ни один заказ невалиден – возвращаем ошибку
                 throw new ArgumentException($"None of the requested meal types are valid. Allowed types: {string.Join(", ", allowedMealTypes)}.");
             }
 
-            // Если часть заказов невалидна, можно либо уведомить пользователя, либо просто продолжить обработку оставшихся заказов.
             if (validMeals.Count != request.Meals.Count)
             {
-                _logger.LogWarning("Some meal orders were removed because they are no longer valid. Valid orders: {ValidOrders}", string.Join(", ", validMeals.Select(m => m.MealType)));
+                _logger.LogWarning("Some meal orders were removed because they are no longer valid. Valid orders: {ValidOrders}",
+                    string.Join(", ", validMeals.Select(m => m.MealType)));
             }
-            // Обновляем список заказов на валидные
             request.Meals = validMeals;
 
             _logger.LogInformation("Processing catering request for AircraftId: {AircraftId}", request.AircraftId);
 
+            // Уведомляем оркестратора о старте доставки питания
             await _externalApiService.NotifyCateringStartAsync(request.AircraftId);
 
-            int totalMeals = request.Meals.Sum(m => m.Count);
-            int vehicleCapacity = _capacityService.GetCapacity();
-            int remainingMeals = totalMeals;
+            // Проверяем, есть ли свободные транспортные средства уже сейчас
+            var vehicles = _vehicleRegistry.GetAllVehicles().ToList();
+            bool freeAvailable = vehicles.Any(v => v.Status.Equals("Available", StringComparison.OrdinalIgnoreCase));
 
-            while (remainingMeals > 0)
+            // Формируем ответ: если есть свободные машины – waiting = false, иначе waiting = true
+            var response = new CateringResponse { Waiting = freeAvailable ? false : true, Status = "success" };
+
+            // Запускаем фоновую обработку запроса (fire-and-forget)
+            _ = Task.Run(async () =>
             {
-                await WaitUntilFlightVehicleCountLessThan(request.AircraftId, MaxVehiclesPerAircraft);
-                int vehiclesToDispatch = remainingMeals > vehicleCapacity ? 2 : 1;
+                int totalMeals = request.Meals.Sum(m => m.Count);
+                int vehicleCapacity = _capacityService.GetCapacity();
+                int remainingMeals = totalMeals;
 
-                while (_vehicleRegistry.GetAllVehicles().Count() >= MaxVehicles &&
-                       _vehicleRegistry.GetAllVehicles().All(v => v.Status == "Busy"))
+                while (remainingMeals > 0)
                 {
-                    _logger.LogInformation("Global vehicle limit reached. Waiting for an available vehicle...");
-                    await Task.Delay(1000);
-                }
-
-                var batchTasks = new List<Task>();
-                for (int i = 0; i < vehiclesToDispatch; i++)
-                {
-                    int mealsForVehicle = Math.Min(vehicleCapacity, remainingMeals - i * vehicleCapacity);
                     await WaitUntilFlightVehicleCountLessThan(request.AircraftId, MaxVehiclesPerAircraft);
-                    IncrementFlightVehicleCount(request.AircraftId);
-                    batchTasks.Add(ProcessSingleCateringOperation(request, mealsForVehicle, request.AircraftId));
-                }
-                await Task.WhenAll(batchTasks);
-                remainingMeals -= vehiclesToDispatch * vehicleCapacity;
-                if (remainingMeals < 0)
-                    remainingMeals = 0;
-            }
+                    int vehiclesToDispatch = remainingMeals > vehicleCapacity ? 2 : 1;
 
-            await _externalApiService.NotifyCateringFinishAsync(request.AircraftId, totalMeals);
-            return new CateringResponse { Waiting = true, Status = "success" };
+                    while (_vehicleRegistry.GetAllVehicles().Count() >= MaxVehicles &&
+                           _vehicleRegistry.GetAllVehicles().All(v => v.Status.Equals("Busy", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        _logger.LogInformation("Global vehicle limit reached. Waiting for an available vehicle...");
+                        await Task.Delay(1000);
+                    }
+
+                    var batchTasks = new List<Task>();
+                    for (int i = 0; i < vehiclesToDispatch; i++)
+                    {
+                        int mealsForVehicle = Math.Min(vehicleCapacity, remainingMeals - i * vehicleCapacity);
+                        await WaitUntilFlightVehicleCountLessThan(request.AircraftId, MaxVehiclesPerAircraft);
+                        IncrementFlightVehicleCount(request.AircraftId);
+                        batchTasks.Add(ProcessSingleCateringOperation(request, mealsForVehicle, request.AircraftId));
+                    }
+                    await Task.WhenAll(batchTasks);
+                    remainingMeals -= vehiclesToDispatch * vehicleCapacity;
+                    if (remainingMeals < 0)
+                        remainingMeals = 0;
+                }
+
+                await _externalApiService.NotifyCateringFinishAsync(request.AircraftId, totalMeals);
+            });
+
+            return response;
         }
+
 
 
 
