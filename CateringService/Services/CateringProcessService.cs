@@ -53,21 +53,30 @@ namespace CateringService.Services
             if (request.Meals == null || request.Meals.Count == 0)
                 throw new ArgumentException("At least one meal order is required.");
 
-            // Получаем список допустимых типов питания
+            // Получаем список допустимых типов питания (в реальном времени)
             var allowedMealTypes = _mealTypeService.GetMealTypes();
 
-            // Проверяем, что каждый заказанный тип питания присутствует в списке допустимых
-            foreach (var meal in request.Meals)
+            // Фильтруем заказы, оставляя только валидные
+            var validMeals = request.Meals
+                .Where(m => allowedMealTypes.Contains(m.MealType, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            if (!validMeals.Any())
             {
-                if (!allowedMealTypes.Contains(meal.MealType, StringComparer.OrdinalIgnoreCase))
-                {
-                    throw new ArgumentException($"Invalid meal type: {meal.MealType}. Allowed types are: {string.Join(", ", allowedMealTypes)}.");
-                }
+                // Если ни один заказ невалиден – возвращаем ошибку
+                throw new ArgumentException($"None of the requested meal types are valid. Allowed types: {string.Join(", ", allowedMealTypes)}.");
             }
+
+            // Если часть заказов невалидна, можно либо уведомить пользователя, либо просто продолжить обработку оставшихся заказов.
+            if (validMeals.Count != request.Meals.Count)
+            {
+                _logger.LogWarning("Some meal orders were removed because they are no longer valid. Valid orders: {ValidOrders}", string.Join(", ", validMeals.Select(m => m.MealType)));
+            }
+            // Обновляем список заказов на валидные
+            request.Meals = validMeals;
 
             _logger.LogInformation("Processing catering request for AircraftId: {AircraftId}", request.AircraftId);
 
-            // Уведомляем оркестратора о старте доставки питания
             await _externalApiService.NotifyCateringStartAsync(request.AircraftId);
 
             int totalMeals = request.Meals.Sum(m => m.Count);
@@ -79,7 +88,6 @@ namespace CateringService.Services
                 await WaitUntilFlightVehicleCountLessThan(request.AircraftId, MaxVehiclesPerAircraft);
                 int vehiclesToDispatch = remainingMeals > vehicleCapacity ? 2 : 1;
 
-                // Если глобальный лимит достигнут – ждем освобождения транспортных средств
                 while (_vehicleRegistry.GetAllVehicles().Count() >= MaxVehicles &&
                        _vehicleRegistry.GetAllVehicles().All(v => v.Status == "Busy"))
                 {
@@ -104,6 +112,7 @@ namespace CateringService.Services
             await _externalApiService.NotifyCateringFinishAsync(request.AircraftId, totalMeals);
             return new CateringResponse { Waiting = true, Status = "success" };
         }
+
 
 
         private async Task ProcessSingleCateringOperation(CateringRequest request, int mealsForVehicle, string flightId)
