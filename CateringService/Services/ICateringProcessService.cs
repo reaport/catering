@@ -8,6 +8,7 @@ namespace CateringService.Services
     {
         Task<CateringResponse> ProcessCateringRequest(CateringRequest request);
         Task<bool> RegisterVehicleAsync(string type);
+        Task InitializeVehiclesAsync();
         Task ReloadAsync();
         IEnumerable<CateringVehicleInfo> GetVehiclesInfo();
     }

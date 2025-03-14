@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using CateringService.Hubs;
+using CateringService.Services;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using CateringService.Services;
-using CateringService.Hubs;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
 
@@ -12,12 +13,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
-
-// Контроллеры с представлениями
+// Добавляем контроллеры с представлениями (если админка используется)
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpClient();
 
-// HttpClient для внешних API
+// Настраиваем именованные HttpClient‑ы для внешних API
 builder.Services.AddHttpClient("ExternalApi", client =>
 {
     var baseUrl = builder.Configuration["ExternalApi:BaseUrl"];
@@ -29,9 +29,7 @@ builder.Services.AddHttpClient("Orchestrator", client =>
     client.BaseAddress = new Uri(baseUrl);
 });
 
-
-
-// Сервисы приложения
+// Регистрация сервисов приложения
 builder.Services.AddSingleton<IVehicleRegistry, VehicleRegistry>();
 builder.Services.AddSingleton<ICapacityService, CapacityService>();
 builder.Services.AddSingleton<ICommModeService, CommModeService>();
@@ -55,25 +53,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.Use(async (context, next) =>
-{
-    // Вариант для быстрой настройки:
-    // Разрешаем (script-src) скрипты с self, code.jquery.com, cdnjs.cloudflare.com
-    // Разрешаем (style-src) стили с self, stackpath.bootstrapcdn.com
-    // Разрешаем (font-src) шрифты с self и data:
-    // Добавлен 'unsafe-inline' для простоты (иначе инлайновые стили/скрипты могут блокироваться)
-    context.Response.Headers.Add("Content-Security-Policy",
-        "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdnjs.cloudflare.com; " +
-        "style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com; " +
-        "font-src 'self' data:;"
-    );
-    await next();
-});
-
 app.UseStaticFiles();
 app.UseRouting();
-app.UseCors("AllowLocalhost");
+app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 
 // Если запрос по корневому URL, перенаправляем на "/admin"
 app.MapGet("/", context =>
@@ -82,13 +64,15 @@ app.MapGet("/", context =>
     return Task.CompletedTask;
 });
 
-// Настраиваем маршрут по умолчанию для контроллеров
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Admin}/{action=Index}/{id?}"
 );
 
-// Регистрируем SignalR-хаб
 app.MapHub<VehicleStatusHub>("/vehiclestatushub");
+
+// Автоматическая инициализация транспортных средств при запуске
+var cateringService = app.Services.GetRequiredService<ICateringProcessService>();
+await cateringService.InitializeVehiclesAsync();
 
 app.Run();

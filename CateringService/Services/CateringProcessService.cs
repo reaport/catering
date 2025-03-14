@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using CateringService.Models;
 using CateringService.Hubs;
+using CateringService.Models;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
@@ -30,19 +30,19 @@ namespace CateringService.Services
             IExternalApiService externalApiService,
             IVehicleRegistry vehicleRegistry,
             ICapacityService capacityService,
-            IMealTypeService mealTypeService,
             IHubContext<VehicleStatusHub> hubContext,
             ILogger<CateringProcessService> logger,
             IAdminConfigService adminConfigService,
+            IMealTypeService mealTypeService,
             ICommModeService commModeService)
         {
             _externalApiService = externalApiService;
             _vehicleRegistry = vehicleRegistry;
             _capacityService = capacityService;
             _hubContext = hubContext;
-            _mealTypeService = mealTypeService;
             _logger = logger;
             _adminConfigService = adminConfigService;
+            _mealTypeService = mealTypeService;
             _commModeService = commModeService;
         }
 
@@ -53,18 +53,14 @@ namespace CateringService.Services
             if (request.Meals == null || request.Meals.Count == 0)
                 throw new ArgumentException("At least one meal order is required.");
 
-            // Получаем список допустимых типов питания (в реальном времени)
+            // Проверяем допустимые типы питания
             var allowedMealTypes = _mealTypeService.GetMealTypes();
-
-            // Фильтруем заказы, оставляя только валидные
             var validMeals = request.Meals
                 .Where(m => allowedMealTypes.Contains(m.MealType, StringComparer.OrdinalIgnoreCase))
                 .ToList();
 
             if (!validMeals.Any())
-            {
                 throw new ArgumentException($"None of the requested meal types are valid. Allowed types: {string.Join(", ", allowedMealTypes)}.");
-            }
 
             if (validMeals.Count != request.Meals.Count)
             {
@@ -74,18 +70,14 @@ namespace CateringService.Services
             request.Meals = validMeals;
 
             _logger.LogInformation("Processing catering request for AircraftId: {AircraftId}", request.AircraftId);
-
-            // Уведомляем оркестратора о старте доставки питания
             await _externalApiService.NotifyCateringStartAsync(request.AircraftId);
 
-            // Проверяем, есть ли свободные транспортные средства уже сейчас
+            // Проверяем наличие свободных ТС сразу
             var vehicles = _vehicleRegistry.GetAllVehicles().ToList();
             bool freeAvailable = vehicles.Any(v => v.Status.Equals("Available", StringComparison.OrdinalIgnoreCase));
-
-            // Формируем ответ: если есть свободные машины – waiting = false, иначе waiting = true
             var response = new CateringResponse { Waiting = freeAvailable ? false : true, Status = "success" };
 
-            // Запускаем фоновую обработку запроса (fire-and-forget)
+            // Фоновая обработка запроса (fire-and-forget)
             _ = Task.Run(async () =>
             {
                 int totalMeals = request.Meals.Sum(m => m.Count);
@@ -124,10 +116,7 @@ namespace CateringService.Services
             return response;
         }
 
-
-
-
-        private async Task ProcessSingleCateringOperation(CateringRequest request, int mealsForVehicle, string flightId)
+        private async Task ProcessSingleCateringOperation(CateringRequest request, int mealsForVehicle, string aircraftId)
         {
             string vehicleId = null;
             string baseNode = null;
@@ -135,7 +124,6 @@ namespace CateringService.Services
 
             try
             {
-                // Получаем доступное транспортное средство
                 var vehicleInfo = _vehicleRegistry.AcquireAvailableVehicle(request.AircraftId);
                 if (string.IsNullOrEmpty(vehicleInfo.VehicleId))
                 {
@@ -151,7 +139,7 @@ namespace CateringService.Services
                         else
                         {
                             _logger.LogError("Failed to register new catering vehicle for AircraftId {AircraftId}", request.AircraftId);
-                            DecrementFlightVehicleCount(flightId);
+                            DecrementFlightVehicleCount(aircraftId);
                             return;
                         }
                     }
@@ -182,11 +170,9 @@ namespace CateringService.Services
                 await _hubContext.Clients.All.SendAsync("ReceiveVehicleUpdate", _vehicleRegistry.GetAllVehicles());
                 await Task.Yield();
 
-                // Формируем конечный узел на основании введенного parking_id и vehicleId
-                // То есть, если в запросе передан "parking_1", итоговый destination будет "parking_1_catering_1"
+                // Формируем конечный узел: destination = NodeId + "_" + vehicleId
                 destination = $"{request.NodeId}_{vehicleId}";
 
-                // Запрашиваем маршрут от текущего узла (baseNode) до сформированного конечного узла (destination)
                 List<string> route = await _externalApiService.GetRouteAsync(baseNode, destination, "catering");
                 if (route == null || route.Count < 2)
                     throw new Exception($"Route not found from {baseNode} to {destination}");
@@ -195,7 +181,6 @@ namespace CateringService.Services
 
                 double travelSpeed = _adminConfigService.GetConfig().MovementSpeed;
 
-                // Перемещаем транспортное средство по сегментам маршрута
                 for (int i = 0; i < route.Count - 1; i++)
                 {
                     string fromNode = route[i];
@@ -207,7 +192,6 @@ namespace CateringService.Services
                     await Task.Delay(delaySeconds * 1000);
 
                     await _externalApiService.NotifyArrivalAsync(vehicleId, "catering", toNode);
-                    // Обновляем текущее местоположение транспортного средства
                     _vehicleRegistry.UpdateCurrentNode(vehicleId, toNode);
                     await _hubContext.Clients.All.SendAsync("ReceiveVehicleUpdate", _vehicleRegistry.GetAllVehicles());
                     await Task.Yield();
@@ -216,7 +200,7 @@ namespace CateringService.Services
                 _logger.LogInformation("Performing catering delivery on vehicle {VehicleId} for {MealCount} meals", vehicleId, mealsForVehicle);
                 await Task.Delay(5000);
 
-                // Обратный маршрут: от точки доставки (destination) до базового узла (baseNode)
+                // Обратный маршрут: от destination до baseNode
                 List<string> returnRoute = await _externalApiService.GetRouteAsync(destination, baseNode, "catering");
                 if (returnRoute != null && returnRoute.Count >= 2)
                 {
@@ -243,7 +227,7 @@ namespace CateringService.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in ProcessSingleCateringOperation for flight {FlightId}", flightId);
+                _logger.LogError(ex, "Error in ProcessSingleCateringOperation for flight {AircraftId}", aircraftId);
                 if (!string.IsNullOrEmpty(vehicleId) && !string.IsNullOrEmpty(baseNode))
                 {
                     _vehicleRegistry.MarkAsAvailable(vehicleId, baseNode);
@@ -253,10 +237,9 @@ namespace CateringService.Services
             }
             finally
             {
-                DecrementFlightVehicleCount(flightId);
+                DecrementFlightVehicleCount(aircraftId);
             }
         }
-
 
         private async Task WaitUntilFlightVehicleCountLessThan(string aircraftId, int limit)
         {
@@ -326,6 +309,25 @@ namespace CateringService.Services
             }
         }
 
+        public async Task InitializeVehiclesAsync()
+        {
+            var config = _adminConfigService.GetConfig();
+            int numberOfVehicles = config.NumberOfCateringVehicles;
+            _logger.LogInformation("Initializing {Count} catering vehicles on startup.", numberOfVehicles);
+            for (int i = 0; i < numberOfVehicles; i++)
+            {
+                bool success = await RegisterVehicleAsync("catering");
+                if (success)
+                {
+                    _logger.LogInformation("Vehicle registered successfully on startup.");
+                }
+                else
+                {
+                    _logger.LogWarning("Vehicle registration failed on startup.");
+                }
+            }
+        }
+
         public async Task ReloadAsync()
         {
             _vehicleRegistry.Reset();
@@ -334,7 +336,7 @@ namespace CateringService.Services
                 FlightVehicleCount.Clear();
             }
             _logger.LogInformation("System reloaded: vehicle registry and flight counters reset.");
-            await Task.CompletedTask;
+            await InitializeVehiclesAsync();
         }
 
         public IEnumerable<CateringVehicleInfo> GetVehiclesInfo()
